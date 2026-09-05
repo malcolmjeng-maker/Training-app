@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111">
+<link rel="manifest" href="manifest.json">
+<title>Min Träning</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f4f5f7;color:#111;font:16px system-ui,-apple-system,sans-serif}
+.app{max-width:600px;margin:auto;padding:20px 16px 90px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
+h1{margin:2px 0;font-size:28px}h2{margin:0 0 12px}h3{margin:0 0 5px}.muted{color:#73777d;font-size:14px}
+.card{background:white;border:1px solid #e5e6e8;border-radius:18px;padding:16px;margin:10px 0}
+button{width:100%;min-height:50px;border:0;border-radius:13px;background:#111;color:#fff;font-size:16px;font-weight:750;padding:13px;margin-top:9px}
+button.secondary{background:#fff;color:#111;border:1px solid #ddd}
+button.small{width:auto;min-height:44px;padding:10px 14px}
+.choice{display:flex;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid #eee}
+.choice input{width:23px;height:23px}.set{display:grid;grid-template-columns:34px 1fr 1fr 50px;gap:7px;align-items:center;margin-top:9px}
+input{width:100%;min-height:46px;border:1px solid #ddd;border-radius:10px;padding:10px;font-size:16px}
+.set button{margin:0;min-height:46px;padding:5px}.done{background:#e6f5eb;color:#14733c}
+.screen{display:none}.screen.active{display:block}.nav{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #ddd;padding:8px;display:flex;gap:8px;z-index:10}.nav button{margin:0;background:#fff;color:#666;border:0}.nav button.active{background:#eee;color:#111}
+.row{display:flex;justify-content:space-between;gap:10px;align-items:center}.pill{font-size:13px;background:#eee;border-radius:99px;padding:5px 9px}
+.tip{background:#191919;border:1px solid #333;color:#eee}.tip b{color:#fff}.next{background:#202020;border:1px solid #3a3a3a}.delta{font-size:13px;color:#aaa}
+</style></head>
+<body>
+<div class="app">
+<div class="top"><div><div class="muted">MIN TRÄNING</div><h1 id="heading">Mina pass</h1></div></div>
+
+<section id="home" class="screen active">
+<div class="card"><h2>Vad är ditt mål?</h2><div class="muted">Välj ett mål så anpassar appen tipsen till din träning.</div>
+<button onclick="setGoal('strength')">💪 Bli starkare</button>
+<button onclick="setGoal('muscle')">🏗️ Bygga muskler</button>
+<button onclick="setGoal('health')">❤️ Träna för hälsan</button>
+</div>
+<div id="goalTip" class="card" style="display:none"></div>
+<div class="card"><h2>Helkropp</h2><div class="muted">Välj själv vilka övningar du gjorde.</div><button onclick="start()">Starta pass</button></div>
+<div class="card"><div class="row"><h3>Statistik</h3><span class="pill" id="count">0 pass</span></div><div class="muted" id="summary">Inga pass sparade ännu.</div></div>
+</section>
+
+<section id="select" class="screen">
+<button class="secondary" onclick="go('home')">← Tillbaka</button>
+<div class="card"><h2>Välj övningar</h2><div class="muted">Kryssa i det du gjorde idag. Jag har lagt till fler alternativ för bröst, rygg, axlar, biceps och triceps.</div>
+<div id="selectionTip" class="tip card" style="display:none"></div><div id="choices"></div><button onclick="toLog()">Fortsätt</button></div>
+</section>
+
+<section id="log" class="screen">
+<button class="secondary" onclick="go('select')">← Ändra övningar</button>
+<div id="goalLogTip" class="card" style="display:none"></div>
+<div id="logList"></div>
+<button onclick="saveWorkout()">✓ Spara pass</button>
+</section>
+
+<section id="progress" class="screen">
+<h2>Progression</h2><div id="progressList"></div>
+</section>
+</div>
+<div class="nav"><button id="n1" class="active" onclick="go('home')">🏋️ Pass</button><button id="n2" onclick="go('progress')">📈 Progression</button></div>
+
+<script>
+const exercises=[
+["One-hand dumbbell press",3,10,"Bröst"],["Hammer curl",3,10,"Biceps"],["Tricep pull down",3,10,"Triceps"],
+["Pull-ups",3,8,"Rygg"],["Bänkpress",3,8,"Bröst"],["Incline dumbbell press",3,10,"Bröst"],
+["Chest fly",3,12,"Bröst"],["Push-ups",3,12,"Bröst"],["Dumbbell row",3,10,"Rygg"],
+["Seated cable row",3,10,"Rygg"],["Lat pulldown",3,10,"Rygg"],["Face pulls",3,12,"Axlar"],
+["Lateral raises",3,12,"Axlar"],["Dumbbell shoulder press",3,10,"Axlar"],["Arnold press",3,10,"Axlar"],
+["Barbell curl",3,10,"Biceps"],["Incline dumbbell curl",3,10,"Biceps"],["Preacher curl",3,10,"Biceps"],
+["Overhead cable triceps extension",3,10,"Triceps"],["Triceps dips",3,8,"Triceps"],["Dumbbell skull crushers",3,10,"Triceps"],
+["Dumbbell shrugs",3,12,"Traps"]
+];
+let selected=[],logs=JSON.parse(localStorage.getItem("myTrainingLogs")||"[]");
+let goal=localStorage.getItem("trainingGoal")||"";
+const goalInfo={
+strength:{title:"💪 Styrka",tip:"Fokusera på relativt tunga vikter, bra teknik och gradvis ökning. ACSM:s 2026-rekommendation lyfter cirka 80% av 1RM och 2–3 set per övning som en praktisk riktning för styrka."},
+muscle:{title:"🏗️ Muskeltillväxt",tip:"Fokusera på tillräcklig träningsvolym och progression över tid. ACSM lyfter ungefär 10 set per muskelgrupp och vecka som en riktlinje för hypertrofi."},
+health:{title:"❤️ Hälsa",tip:"Fokusera på regelbundenhet och att träna hela kroppen. Styrketräning minst 2 dagar i veckan är en bra grund, kompletterat med kondition och vardagsrörelse."}
+};
+function setGoal(g){
+ goal=g; localStorage.setItem("trainingGoal",g);
+ const x=goalInfo[g];
+ document.getElementById("goalTip").style.display="block";
+ document.getElementById("goalTip").innerHTML=`<h3>${x.title}</h3><div class="muted">${x.tip}</div>`;
+}
+function showSavedGoal(){
+ if(goal) setGoal(goal);
+}
+
+function go(id){
+document.querySelectorAll(".screen").forEach(x=>x.classList.remove("active"));
+document.getElementById(id).classList.add("active");
+document.getElementById("heading").textContent=id==="progress"?"Progression":id==="log"?"Logga pass":id==="select"?"Välj övningar":"Mina pass";
+document.getElementById("n1").classList.toggle("active",id!=="progress");
+document.getElementById("n2").classList.toggle("active",id==="progress");
+if(id==="home")home(); if(id==="progress")progress();
+}
+function recommendation(ex){
+  const last=logs.flatMap(l=>l.sets).filter(x=>x.exercise===ex);
+  if(!last.length) return {text:"Börja lugnt och välj en vikt där du kan göra alla reps med bra teknik.", action:"Första passet"};
+  const prev=last.slice(-3);
+  const best=prev.reduce((m,x)=>Math.max(m,parseFloat(x.weight)||0),0);
+  if(goal==="strength") return {text:"Försök behålla god teknik och öka vikten lite när du klarar alla set med kontroll.", action:best?`Senaste toppvikt ${best} kg`:"Bygg upp vikten gradvis"};
+  if(goal==="muscle") return {text:"När du når övre delen av rep-intervallet med bra teknik kan du öka vikten lite nästa gång.", action:best?`Senaste toppvikt ${best} kg`:"Börja med en kontrollerad vikt"};
+  return {text:"Prioritera regelbundenhet, bra teknik och en belastning som känns utmanande men kontrollerad.", action:"Fokusera på kontinuitet"};
+}
+function home(){
+document.getElementById("count").textContent=logs.length+" pass";
+document.getElementById("summary").textContent=logs.length?("Senast: "+logs[0].date+" · "+logs[0].sets.length+" set"):"Inga pass sparade ännu.";
+}
+function start(){
+const tip=document.getElementById("selectionTip");
+if(goal){const x=goalInfo[goal]; tip.style.display="block"; tip.innerHTML=`<b>${x.title}</b><div class="delta">${x.tip}</div>`;} else tip.style.display="none";
+document.getElementById("choices").innerHTML=exercises.map((e,i)=>`<label class="choice"><input type="checkbox" id="c${i}"><div><b>${e[0]}</b><div class="muted">${e[3]} · ${e[1]} set · riktmärke ${e[2]} reps</div></div></label>`).join("");
+go("select");
+}
+function toLog(){
+if(goal){
+ const x=goalInfo[goal]; document.getElementById("goalLogTip").style.display="block";
+ document.getElementById("goalLogTip").innerHTML=`<h3>${x.title}</h3><div class="muted">${x.tip}</div>`;
+}
+selected=exercises.filter((e,i)=>document.getElementById("c"+i).checked);
+if(!selected.length){alert("Välj minst en övning.");return}
+document.getElementById("logList").innerHTML=selected.map((e,ei)=>`<div class="card"><div class="row"><div><h3>${e[0]}</h3><div class="muted">${e[3]}</div></div><span class="pill">${e[1]} set</span></div>
+${Array.from({length:e[1]},(_,si)=>`<div class="set"><b>${si+1}</b><input id="w${ei}_${si}" inputmode="decimal" placeholder="kg"><input id="r${ei}_${si}" inputmode="numeric" placeholder="reps" value="${e[2]}"><button class="secondary" id="d${ei}_${si}" onclick="this.classList.toggle('done')">✓</button></div>`).join("")}</div>`).join("");
+go("log");
+}
+function saveWorkout(){
+let sets=[];
+selected.forEach((e,ei)=>{for(let si=0;si<e[1];si++){let w=document.getElementById("w"+ei+"_"+si).value,r=document.getElementById("r"+ei+"_"+si).value;if(w||r)sets.push({exercise:e[0],weight:w,reps:r})}});
+if(!sets.length){alert("Lägg in vikt eller reps på minst ett set.");return}
+logs.unshift({date:new Date().toLocaleString("sv-SE",{dateStyle:"medium",timeStyle:"short"}),sets});
+localStorage.setItem("myTrainingLogs",JSON.stringify(logs));alert("Passet är sparat! 💪");go("progress");
+}
+function progress(){
+if(!logs.length){document.getElementById("progressList").innerHTML='<div class="card muted">Logga ditt första pass för att börja följa progressionen.</div>';return}
+let map={}; logs.slice().reverse().forEach(l=>l.sets.forEach(s=>(map[s.exercise]??=[]).push(s)));
+document.getElementById("progressList").innerHTML=Object.entries(map).map(([name,a])=>{
+let first=a[0],last=a[a.length-1],fw=parseFloat(first.weight)||0,lw=parseFloat(last.weight)||0,d=lw-fw;
+let rec=recommendation(name);
+return `<div class="card"><div class="row"><h3>${name}</h3><b>${last.weight||"—"} kg × ${last.reps||"—"}</b></div>
+<div class="muted">Första: ${first.weight||"—"} kg × ${first.reps||"—"} · Viktförändring: ${d>0?"+":""}${d} kg</div>
+<div class="card next" style="margin:12px 0 0"><b>💡 Nästa gång</b><div class="delta">${rec.text}</div><div class="delta">${rec.action}</div></div></div>`;
+}).join("");
+}
+home(); showSavedGoal();
+if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
+</script></body></html>
